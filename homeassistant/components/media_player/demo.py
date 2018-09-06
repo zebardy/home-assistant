@@ -14,9 +14,9 @@ from homeassistant.const import STATE_OFF, STATE_PAUSED, STATE_PLAYING
 import homeassistant.util.dt as dt_util
 
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
+def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the media player demo platform."""
-    add_devices([
+    add_entities([
         DemoYoutubePlayer(
             'Living Room', 'eyU3bRy2x44',
             '♥♥ The Best Fireplace Video (3 hours)', 300),
@@ -295,7 +295,6 @@ class DemoMusicPlayer(AbstractDemoPlayer):
     @property
     def media_album_name(self):
         """Return the album of current playing media (Music track only)."""
-        # pylint: disable=no-self-use
         return "Bounzz"
 
     @property

@@ -5,7 +5,6 @@ For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/media_player.universal/
 """
 import logging
-# pylint: disable=import-error
 from copy import copy
 
 import voluptuous as vol
@@ -63,7 +62,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 }, extra=vol.REMOVE_EXTRA)
 
 
-async def async_setup_platform(hass, config, async_add_devices,
+async def async_setup_platform(hass, config, async_add_entities,
                                discovery_info=None):
     """Set up the universal media players."""
     player = UniversalMediaPlayer(
@@ -75,7 +74,7 @@ async def async_setup_platform(hass, config, async_add_devices,
         config.get(CONF_STATE_TEMPLATE)
     )
 
-    async_add_devices([player])
+    async_add_entities([player])
 
 
 class UniversalMediaPlayer(MediaPlayerDevice):
