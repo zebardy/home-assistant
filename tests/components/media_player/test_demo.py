@@ -2,7 +2,8 @@
 import unittest
 from unittest.mock import patch
 import asyncio
-from freezegun import freeze_time
+from datetime import datetime
+import homeassistant.util.dt as dt_util
 
 from homeassistant.setup import setup_component
 from homeassistant.const import HTTP_HEADER_HA_AUTH
@@ -285,17 +286,23 @@ class TestMediaPlayerWeb(unittest.TestCase):
 
         assert self.hass.states.is_state(entity_id, 'playing')
         state = self.hass.states.get(entity_id)
-        with freeze_time("2018-09-05 01:00:00"):
+        with patch('homeassistant.helpers.condition.dt_util.utcnow',
+                   return_value=datetime(2018, 9, 5, 1, 0, 0,
+                                         tzinfo=dt_util.UTC)):
             req = requests.get(HTTP_BASE_URL +
                                state.attributes.get('entity_picture'))
         assert req.status_code == 200
         assert req.text == fake_picture1_data
-        with freeze_time("2018-09-05 01:04:59"):
+        with patch('homeassistant.helpers.condition.dt_util.utcnow',
+                   return_value=datetime(2018, 9, 5, 1, 4, 59,
+                                         tzinfo=dt_util.UTC)):
             req = requests.get(HTTP_BASE_URL +
                                state.attributes.get('entity_picture'))
         assert req.status_code == 200
         assert req.text == fake_picture1_data
-        with freeze_time("2018-09-05 01:05:00"):
+        with patch('homeassistant.helpers.condition.dt_util.utcnow',
+                   return_value=datetime(2018, 9, 5, 1, 5, 0,
+                                         tzinfo=dt_util.UTC)):
             req = requests.get(HTTP_BASE_URL +
                                state.attributes.get('entity_picture'))
         assert req.status_code == 200
