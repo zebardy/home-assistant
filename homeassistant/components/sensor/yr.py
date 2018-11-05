@@ -13,6 +13,7 @@ from xml.parsers.expat import ExpatError
 import aiohttp
 import async_timeout
 import voluptuous as vol
+from datetime import timedelta
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components.sensor import PLATFORM_SCHEMA
@@ -34,20 +35,23 @@ CONF_ATTRIBUTION = "Weather forecast from met.no, delivered " \
 # https://api.met.no/license_data.html
 
 SENSOR_TYPES = {
-    'symbol': ['Symbol', None],
-    'precipitation': ['Precipitation', 'mm'],
-    'temperature': ['Temperature', '°C'],
-    'windSpeed': ['Wind speed', 'm/s'],
-    'windGust': ['Wind gust', 'm/s'],
-    'pressure': ['Pressure', 'hPa'],
-    'windDirection': ['Wind direction', '°'],
-    'humidity': ['Humidity', '%'],
-    'fog': ['Fog', '%'],
-    'cloudiness': ['Cloudiness', '%'],
-    'lowClouds': ['Low clouds', '%'],
-    'mediumClouds': ['Medium clouds', '%'],
-    'highClouds': ['High clouds', '%'],
-    'dewpointTemperature': ['Dewpoint temperature', '°C'],
+    'symbol': ['Symbol', None, 'symbol'],
+    'precipitation': ['Precipitation', 'mm', 'precipitation'],
+    'totalPrecipitation': ['Total precipitation', 'mm', 'precipitation'],
+    'temperature': ['Temperature', '°C', 'temperature'],
+    'maxTemperature': ['Temperature max', '°C', 'temperature'],
+    'minTemperature': ['Temperature min', '°C', 'temperature'],
+    'windSpeed': ['Wind speed', 'm/s', 'windSpeed'],
+    'windGust': ['Wind gust', 'm/s', 'windGust'],
+    'pressure': ['Pressure', 'hPa', 'pressure'],
+    'windDirection': ['Wind direction', '°', 'windDirection'],
+    'humidity': ['Humidity', '%', 'humidity'],
+    'fog': ['Fog', '%', 'fog'],
+    'cloudiness': ['Cloudiness', '%', 'cloudiness'],
+    'lowClouds': ['Low clouds', '%', 'lowClouds'],
+    'mediumClouds': ['Medium clouds', '%', 'mediumClouds'],
+    'highClouds': ['High clouds', '%', 'highClouds'],
+    'dewpointTemperature': ['Dewpoint temperature', '°C', 'dewpointTemperature'],
 }
 
 CONF_FORECAST = 'forecast'
@@ -104,6 +108,7 @@ class YrSensor(Entity):
         self.client_name = name
         self._name = SENSOR_TYPES[sensor_type][0]
         self.type = sensor_type
+        self._source = SENSOR_TYPES[sensor_type][2]
         self._state = None
         self._unit_of_measurement = SENSOR_TYPES[self.type][1]
 
@@ -116,6 +121,11 @@ class YrSensor(Entity):
     def state(self):
         """Return the state of the device."""
         return self._state
+
+    @property
+    def source(self):
+        """Return the source attribute of the device."""
+        return self._source
 
     @property
     def should_poll(self):
@@ -217,38 +227,51 @@ class YrData:
 
             ordered_entries.append((average_dist, time_entry))
 
-        ordered_entries.sort(key=lambda item: item[0])
+        ordered_entries.sort(key=lambda item: item[0], reverse=True)
 
         # Update all devices
         tasks = []
         if ordered_entries:
+
+            today_end = dt_util.as_utc(dt_util.start_of_local_day() + timedelta(days=1))
+
             for dev in self.devices:
                 new_state = None
 
                 for (_, selected_time_entry) in ordered_entries:
                     loc_data = selected_time_entry['location']
 
-                    if dev.type not in loc_data:
+                    if dev._source not in loc_data:
                         continue
 
+                    if dt_util.parse_datetime(selected_time_entry['@to']) <= today_end:
+                      if dev.type == 'totalPrecipitation':
+                          if new_state == None:
+                              new_state = 0
+                          new_state = str(float(new_state) + float(loc_data[dev.source]['@value'])) #AARON
+                      if dev.type == 'maxTemperature':
+                          if new_state == None:
+                              new_state = 0
+                          new_state = str(max(float(new_state), float(loc_data[dev.source]['@value']))) #AARON
+                      if dev.type == 'minTemperature':
+                          if new_state == None:
+                              new_state = 9999
+                          new_state = str(min(float(new_state), float(loc_data[dev.source]['@value']))) #AARON
                     if dev.type == 'precipitation':
-                        new_state = loc_data[dev.type]['@value']
+                        new_state = loc_data[dev.source]['@value']
                     elif dev.type == 'symbol':
-                        new_state = loc_data[dev.type]['@number']
+                        new_state = loc_data[dev.source]['@number']
                     elif dev.type in ('temperature', 'pressure', 'humidity',
                                       'dewpointTemperature'):
-                        new_state = loc_data[dev.type]['@value']
+                        new_state = loc_data[dev.source]['@value']
                     elif dev.type in ('windSpeed', 'windGust'):
-                        new_state = loc_data[dev.type]['@mps']
+                        new_state = loc_data[dev.source]['@mps']
                     elif dev.type == 'windDirection':
-                        new_state = float(loc_data[dev.type]['@deg'])
+                        new_state = float(loc_data[dev.source]['@deg'])
                     elif dev.type in ('fog', 'cloudiness', 'lowClouds',
                                       'mediumClouds', 'highClouds'):
-                        new_state = loc_data[dev.type]['@percent']
+                        new_state = loc_data[dev.source]['@percent']
 
-                    break
-
-                # pylint: disable=protected-access
                 if new_state != dev._state:
                     dev._state = new_state
                     tasks.append(dev.async_update_ha_state())

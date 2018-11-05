@@ -7,7 +7,6 @@ from homeassistant.bootstrap import async_setup_component
 import homeassistant.util.dt as dt_util
 from tests.common import assert_setup_component, load_fixture
 
-
 NOW = datetime(2016, 6, 9, 1, tzinfo=dt_util.UTC)
 
 
@@ -111,3 +110,34 @@ def test_forecast_setup(hass, aioclient_mock):
     state = hass.states.get('sensor.yr_wind_speed')
     assert state.attributes.get('unit_of_measurement') == 'm/s'
     assert state.state == '3.6'
+
+@asyncio.coroutine
+def test_agrigates(hass, aioclient_mock):
+    """Test value aggrigation."""
+    aioclient_mock.get('https://aa015h6buqvih86i1.api.met.no/'
+                       'weatherapi/locationforecast/1.9/',
+                       text=load_fixture('yr.no.json'))
+
+    config = {'platform': 'yr',
+              'elevation': 0,
+              'forecast': 24,
+              'monitored_conditions': [
+                  'totalPrecipitation',
+                  'maxTemperature',
+                  'minTemperature']}
+    hass.allow_pool = True
+    with patch('homeassistant.components.sensor.yr.dt_util.utcnow',
+               return_value=NOW), assert_setup_component(1):
+        yield from async_setup_component(hass, 'sensor', {'sensor': config})
+
+    state = hass.states.get('sensor.yr_total_precipitation')
+    assert state.attributes.get('unit_of_measurement') == 'mm'
+    assert state.state == '7.7'
+
+    state = hass.states.get('sensor.yr_temperature_max')
+    assert state.attributes.get('unit_of_measurement') == '°C'
+    assert state.state == '32.7'
+
+    state = hass.states.get('sensor.yr_temperature_min')
+    assert state.attributes.get('unit_of_measurement') == '°C'
+    assert state.state == '19.7'
