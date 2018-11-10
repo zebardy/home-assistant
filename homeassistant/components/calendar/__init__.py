@@ -11,7 +11,7 @@ import re
 from aiohttp import web
 
 from homeassistant.components.google import (
-    CONF_OFFSET, CONF_DEVICE_ID, CONF_NAME)
+    CONF_OFFSET, CONF_DEFAULT_OFFSET, CONF_DEVICE_ID, CONF_NAME)
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA  # noqa
 from homeassistant.helpers.config_validation import time_period_str
@@ -73,6 +73,7 @@ class CalendarEventDevice(Entity):
         self._name = data.get(CONF_NAME)
         self.dev_id = data.get(CONF_DEVICE_ID)
         self._offset = data.get(CONF_OFFSET, DEFAULT_CONF_OFFSET)
+        self.default_offset = data.get(CONF_DEFAULT_OFFSET, None)
         self.entity_id = generate_entity_id(
             ENTITY_ID_FORMAT, self.dev_id, hass=hass)
 
@@ -165,13 +166,17 @@ class CalendarEventDevice(Entity):
         end = get_date(self.data.event['end'])
 
         summary = self.data.event.get('summary', '')
-
+        time = self.default_offset
         # check if we have an offset tag in the message
         # time is HH:MM or MM
         reg = '{}([+-]?[0-9]{{0,2}}(:[0-9]{{0,2}})?)'.format(self._offset)
         search = re.search(reg, summary)
-        if search and search.group(1):
-            time = search.group(1)
+        time = self.default_offset
+        if (search and search.group(1)) or (time != None):
+            if time == None:
+              time = search.group(1)
+              summary = (summary[:search.start()] + summary[search.end():]) \
+                  .strip()
             if ':' not in time:
                 if time[0] == '+' or time[0] == '-':
                     time = '{}0:{}'.format(time[0], time[1:])
@@ -179,8 +184,6 @@ class CalendarEventDevice(Entity):
                     time = '0:{}'.format(time)
 
             offset_time = time_period_str(time)
-            summary = (summary[:search.start()] + summary[search.end():]) \
-                .strip()
         else:
             offset_time = dt.dt.timedelta()  # default it
 
