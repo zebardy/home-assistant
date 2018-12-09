@@ -160,21 +160,26 @@ async def get_bridge(hass, host, username=None):
         websession=aiohttp_client.async_get_clientsession(hass)
     )
 
-    try:
-        with async_timeout.timeout(5):
-            # Create username if we don't have one
-            if not username:
-                await bridge.create_user('home-assistant')
-            # Initialize bridge (and validate our username)
-            await bridge.initialize()
+    retry_count=3
+    last_exception=None
+    for _ in range(retry_count):
+        try:
+            with async_timeout.timeout(5):
+                # Create username if we don't have one
+                if not username:
+                    await bridge.create_user('home-assistant')
+                # Initialize bridge (and validate our username)
+                await bridge.initialize()
 
-        return bridge
-    except (aiohue.LinkButtonNotPressed, aiohue.Unauthorized):
-        LOGGER.warning("Connected to Hue at %s but not registered.", host)
-        raise AuthenticationRequired
-    except (asyncio.TimeoutError, aiohue.RequestError):
-        LOGGER.error("Error connecting to the Hue bridge at %s", host)
+            return bridge
+        except (aiohue.LinkButtonNotPressed, aiohue.Unauthorized):
+            LOGGER.warning("Connected to Hue at %s but not registered.", host)
+            raise AuthenticationRequired
+        except (asyncio.TimeoutError, aiohue.RequestError):
+            LOGGER.error("Error connecting to the Hue bridge at %s", host)
+            last_exception = CannotConnect
+        except aiohue.AiohueException:
+            LOGGER.exception('Unknown Hue linking error occurred')
+            raise AuthenticationRequired
+    if last_exception is not None:
         raise CannotConnect
-    except aiohue.AiohueException:
-        LOGGER.exception('Unknown Hue linking error occurred')
-        raise AuthenticationRequired
